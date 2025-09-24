@@ -27,8 +27,52 @@ let timerStarted = false;
 let newPlayer = null;
 let offline = null;
 
-let HOST = location.origin.replace(/^http/, "ws");
-let ws = new WebSocket(HOST);
+
+// Adapter: use socket.io-client but keep existing ws.send/onmessage API for compatibility
+const socket = io();
+// minimal ws-like bridge used by existing code
+
+
+// Listen to server 'state' events and synthesize responses expected by existing client code
+socket.on('state', (g) => {
+  try {
+    // convert games object to array if needed
+    const playersArray = [];
+    const spectatorsArray = [];
+    if (g && g.players) {
+      for (const pid in g.players) {
+        const p = g.players[pid];
+        // include clientId if present
+        playersArray.push(Object.assign({}, p, { clientId: pid }));
+      }
+    }
+    const respState = {
+      method: 'state',
+      game: g,
+      players: playersArray,
+      spectators: spectatorsArray,
+      roomId: roomId
+    };
+    // call existing ws.onmessage handler
+    if (typeof ws.onmessage === 'function') {
+      ws.onmessage({ data: JSON.stringify(respState) });
+    }
+    // Also send an updateTable-like message in case client expects it
+    const respUpdate = {
+      method: 'updateTable',
+      players: playersArray,
+      spectators: spectatorsArray,
+      theClient: window.theClient || null,
+      playerSlot: window.playerSlot || null
+    };
+    if (typeof ws.onmessage === 'function') {
+      ws.onmessage({ data: JSON.stringify(respUpdate) });
+    }
+  } catch (e) {
+    console.error('state handler error', e);
+  }
+});
+
 
 const btnCreate = document.getElementById("btnCreate");
 const btnOffline = document.getElementById("btnOffline");
@@ -75,7 +119,7 @@ window.addEventListener("load", function () {
         method: "playersLength",
         gameId: gameId,
       };
-      ws.send(JSON.stringify(payLoadLength));
+      sendPayload(payLoadLength);
       // Set 50ms delay so above method response before below function starts
       setTimeout(function () {
         if (playersLength >= 7) {
@@ -103,7 +147,7 @@ window.addEventListener("load", function () {
         playerSlotHTML: playerSlotHTML,
         roomId: roomId,
       };
-      ws.send(JSON.stringify(payLoad));
+      sendPayload(payLoad);
 
       // setTimeout(playerJoin, 500)
       setTimeout(function () {
@@ -126,7 +170,7 @@ window.addEventListener("load", function () {
         roomId: roomId,
         offline: offline,
       };
-      ws.send(JSON.stringify(payLoad));
+      sendPayload(payLoad);
 
       // setTimeout(playerJoin, 500)
       setTimeout(function () {
@@ -196,7 +240,7 @@ function playerJoin() {
     nickname: nickname,
     avatar: avatar,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function sendPlayerBets() {
@@ -205,7 +249,7 @@ function sendPlayerBets() {
     players: players,
     spectators: spectators,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function updatePlayerCards() {
@@ -216,7 +260,7 @@ function updatePlayerCards() {
     player: player,
     resetCards: resetCards,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function updateDealerCards() {
@@ -229,7 +273,7 @@ function updateDealerCards() {
     dealersTurn: dealersTurn,
     // "dealerHiddenCardRemoveNext": dealerHiddenCardRemoveNext
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function sendPlayerDeck() {
@@ -241,7 +285,7 @@ function sendPlayerDeck() {
     clientDeal: clientDeal,
     gameOn: gameOn,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function clientIsReady() {
@@ -251,7 +295,7 @@ function clientIsReady() {
     spectators: spectators,
     theClient: theClient,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function clientHasLeft() {
@@ -261,7 +305,7 @@ function clientHasLeft() {
     spectators: spectators,
     theClient: theClient,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function updatePlayers() {
@@ -273,7 +317,7 @@ function updatePlayers() {
     deck: deck,
     gameOn: gameOn,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function updateCurrentPlayer() {
@@ -284,7 +328,7 @@ function updateCurrentPlayer() {
     player: player,
     dealersTurn: dealersTurn,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function sendPlayerThePlay() {
@@ -298,7 +342,7 @@ function sendPlayerThePlay() {
     dealersTurn: dealersTurn,
     gameId: gameId,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function sendShowSum() {
@@ -307,7 +351,7 @@ function sendShowSum() {
     players: players,
     spectators: spectators,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function joinTable() {
@@ -320,7 +364,7 @@ function joinTable() {
     playerSlotHTML: playerSlotHTML,
     gameId: gameId,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function updateTable() {
@@ -332,7 +376,7 @@ function updateTable() {
     theSlot: theSlot,
     playerSlot: playerSlot,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function sendDealersTurn() {
@@ -342,7 +386,7 @@ function sendDealersTurn() {
     spectators: spectators,
     dealersTurn: dealersTurn,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function terminatePlayer() {
@@ -360,7 +404,7 @@ function terminatePlayer() {
     player: player,
     gameOn: gameOn,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function resetRound() {
@@ -369,7 +413,7 @@ function resetRound() {
     spectators: spectators,
     theClient: theClient,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function playerResult() {
@@ -378,7 +422,7 @@ function playerResult() {
     spectators: spectators,
     players: players,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function playerResultNatural() {
@@ -388,7 +432,7 @@ function playerResultNatural() {
     players: players,
     playerNaturalIndex: playerNaturalIndex,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function finalCompare() {
@@ -398,7 +442,7 @@ function finalCompare() {
     spectators: spectators,
     players: players,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 function resetGameState() {
@@ -408,7 +452,7 @@ function resetGameState() {
     spectators: spectators,
     players: players,
   };
-  ws.send(JSON.stringify(payLoad));
+  sendPayload(payLoad);
 }
 
 window.addEventListener("load", (event) => {
@@ -419,13 +463,14 @@ window.addEventListener("load", (event) => {
       method: "getRoute",
       getRouteId: getRouteId,
     };
-    ws.send(JSON.stringify(payLoadRoute));
+    sendPayload(payLoadRoute);
   }
 });
 
-ws.onmessage = (message) => {
+
+function handleResponse(response) {
+
   // message.data
-  const response = JSON.parse(message.data);
   // connect
   if (response.method === "connect") {
     clientId = response.clientId;
@@ -835,7 +880,7 @@ ws.onmessage = (message) => {
         players[players.findIndex((players) => players.hasLeft === false)]
           .clientId === clientId
       ) {
-        ws.send(JSON.stringify(payLoad));
+        sendPayload(payLoad);
       }
       // Reset the game if players array is not in the spectators array
       if (players.length === 1 && players[0].hasLeft === true) {
@@ -1263,7 +1308,9 @@ ws.onmessage = (message) => {
     updateAllPlayers();
     syncTheGame();
   }
-}; // <------ End of ws message listener
+}
+
+ // <------ End of ws message listener
 
 // Keep everything in sync
 function updateAllPlayers() {
@@ -1343,7 +1390,7 @@ function syncTheGame() {
     dealer: dealer,
     gameOn: gameOn,
   };
-  ws.send(JSON.stringify(syncGame));
+  sendPayload(syncGame);
 }
 
 // Player joins a slot on the table
@@ -1451,4 +1498,35 @@ window.addEventListener("beforeunload", function () {
   }
   terminatePlayer();
   // Dont add more code below terminatePlayer(), its dangerous
+});
+
+
+
+// Receive state updates from server and pass to existing response handler
+socket.on('state', (g) => {
+  try {
+    // Build arrays expected by client from games object
+    const playersArray = [];
+    const spectatorsArray = [];
+    if (g && g.players) {
+      for (const pid in g.players) {
+        const p = g.players[pid];
+        // keep original fields if any
+        playersArray.push(Object.assign({}, p, { clientId: pid }));
+      }
+    }
+    const response = {
+      method: 'state',
+      game: g,
+      players: playersArray,
+      spectators: spectatorsArray,
+      roomId: roomId
+    };
+    // call the unified handler
+    if (typeof handleResponse === 'function') {
+      handleResponse(response);
+    }
+  } catch (e) {
+    console.error('state handler error', e);
+  }
 });
