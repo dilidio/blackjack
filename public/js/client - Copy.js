@@ -27,11 +27,7 @@ let timerStarted = false;
 let newPlayer = null;
 let offline = null;
 
-//let HOST = location.origin.replace(/^http/, "ws");
-//let ws = new WebSocket(HOST);
-
-let protocol = (location.protocol === "https:") ? "wss://" : "ws://";
-let HOST = protocol + location.host;
+let HOST = location.origin.replace(/^http/, "ws");
 let ws = new WebSocket(HOST);
 
 const btnCreate = document.getElementById("btnCreate");
