@@ -27,89 +27,10 @@ let timerStarted = false;
 let newPlayer = null;
 let offline = null;
 
-
-// Adapter: use socket.io-client but keep existing ws.send/onmessage API for compatibility
-const socket = io();
-// minimal ws-like bridge used by existing code
-let ws = {
-  onmessage: function(){},
-  send: function(msg) {
-    try {
-      const payLoad = JSON.parse(msg);
-      const method = payLoad.method;
-      // Map client's method calls to socket.io events expected by server
-      if (method === 'create' || method === 'join' || method === 'playersLength') {
-        // determine room id (generate if not present)
-        let room = payLoad.roomId || payLoad.gameId || null;
-        if (!room) {
-          room = Math.random().toString(36).substr(2,6);
-        }
-        roomId = room;
-        // emit join with name if present
-        const name = payLoad.clientId || (document.querySelector('#nickname') && document.querySelector('#nickname').value) || null;
-        socket.emit('join', { room, name });
-      } else if (method === 'start') {
-        socket.emit('start', roomId);
-      } else if (method === 'bet') {
-        // try different payload shapes
-        const amount = payLoad.amount || payLoad.bet || 0;
-        socket.emit('bet', { room: roomId, amount });
-      } else if (method === 'hit') {
-        socket.emit('hit', roomId);
-      } else if (method === 'stand') {
-        socket.emit('stand', roomId);
-      } else if (method === 'leave') {
-        // no dedicated leave handler on server; just disconnect from server side room by disconnecting
-        socket.disconnect();
-      } else {
-        console.log('ws bridge: unhandled method', method);
-      }
-    } catch (e) {
-      console.error('ws bridge send parse error', e);
-    }
-  }
-};
-
-// Listen to server 'state' events and synthesize responses expected by existing client code
-socket.on('state', (g) => {
-  try {
-    // convert games object to array if needed
-    const playersArray = [];
-    const spectatorsArray = [];
-    if (g && g.players) {
-      for (const pid in g.players) {
-        const p = g.players[pid];
-        // include clientId if present
-        playersArray.push(Object.assign({}, p, { clientId: pid }));
-      }
-    }
-    const respState = {
-      method: 'state',
-      game: g,
-      players: playersArray,
-      spectators: spectatorsArray,
-      roomId: roomId
-    };
-    // call existing ws.onmessage handler
-    if (typeof ws.onmessage === 'function') {
-      ws.onmessage({ data: JSON.stringify(respState) });
-    }
-    // Also send an updateTable-like message in case client expects it
-    const respUpdate = {
-      method: 'updateTable',
-      players: playersArray,
-      spectators: spectatorsArray,
-      theClient: window.theClient || null,
-      playerSlot: window.playerSlot || null
-    };
-    if (typeof ws.onmessage === 'function') {
-      ws.onmessage({ data: JSON.stringify(respUpdate) });
-    }
-  } catch (e) {
-    console.error('state handler error', e);
-  }
-});
-
+// ✅ ÚJ: automatikus ws/wss protokoll választás
+let protocol = (location.protocol === "https:") ? "wss://" : "ws://";
+let HOST = protocol + location.host;
+let ws = new WebSocket(HOST);
 
 const btnCreate = document.getElementById("btnCreate");
 const btnOffline = document.getElementById("btnOffline");

@@ -15,9 +15,10 @@ COPY . .
 
 # Set default environment variables
 ENV NODE_ENV=production
+ENV PORT=8080
 
-# Expose the port (Render majd beállítja PORT változót)
-EXPOSE 8080
+# Expose the port the app runs on
+EXPOSE $PORT
 
-# Define the command to run the app
+# Define the command to run the app using environment variables
 CMD ["npm", "run", "start"]
